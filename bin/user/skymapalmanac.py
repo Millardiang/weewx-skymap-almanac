@@ -31,9 +31,11 @@
     Numeric space             &#8199;
     Narrow no-break space     &#8239;
     Thin space                &#8201;
+
+    Updated 15:12:25 Ian Millard - added parameter passing to allow font-family selection eg $almanac.skymap(width=490, font_family="'Arial, Helvetica', sans-serif")
 """
 
-VERSION="0.3"
+VERSION="0.3.1"
 
 import time
 import os.path
@@ -168,6 +170,8 @@ class SkymapBinder:
         self.width = 800
         self.max_magnitude = weeutil.weeutil.to_float(config_dict.get('max_magnitude',6.0))
         self.star_tooltip_max_magnitude = weeutil.weeutil.to_float(config_dict.get('star_tooltip_max_magnitude',2.5))
+        # ADD THIS LINE: Get font-family from config
+        self.font_family = config_dict.get('font_family', 'sans-serif')
         if 'venus_phases' not in almanac_obj.__dict__:
             almanac_obj.venus_phases = user.skyfieldalmanac.DEFAULT_PHASES
         if 'mercury_phases' not in almanac_obj.__dict__:
@@ -185,6 +189,7 @@ class SkymapBinder:
                 show_location(bool): include location in the map
                 bodies(list): heavenly bodies to include in the map
                 fromoutside(bool): reverse east-west
+                font_family(str): font family for text elements
         """
         for key in kwargs:
             if key=='width':
@@ -197,9 +202,15 @@ class SkymapBinder:
                 self.bodies = list(kwargs[key])
             elif key in {'max_magnitude','star_tooltip_max_magnitude'}:
                 setattr(self,key,weeutil.weeutil.to_float(kwargs[key]))
+            elif key=='font_family':
+                self.font_family = kwargs[key]  # ADD THIS
             else:
                 setattr(self,key,kwargs[key])
         return self
+
+    def get_font_style(self, size):
+        """Generate font style string with font-family"""
+        return 'font-size:%spx; font-family:%s' % (size, self.font_family)
 
     def __str__(self):
         try:
@@ -310,7 +321,7 @@ class SkymapBinder:
             #s += SkymapBinder.four_pointed_star(x,y,r,color)
             #s += '<path fill="none" stroke="#808080" stroke-width="0.2" d="M%.4f,%.4fl%.4f,%.4fM%.4f,%.4fl%.4f,%.4f" />\n' % ()
             if above20:
-                s.append('<text x="%.4f" y="%.4f" font-size="3" text-anchor="middle" dominant-baseline="middle">%dh</text>\n' % (x,y,hour))
+                s.append('<text x="%.4f" y="%.4f" style="%s" text-anchor="middle" dominant-baseline="middle">%dh</text>\n' % (x,y,self.get_font_style(3),hour))
             else:
                 s.append('<circle cx="%.4f" cy="%.4f" r="%s"><title>alt=%.4f az=%.4f</title></circle>\n' % (x,y,0.5 if hour!=0 else 1,alt,az*RAD2DEG))
         s.append('</g>\n')
@@ -449,8 +460,10 @@ class SkymapBinder:
         s.append('" />\n')
         for i in range(11):
             if i!=5:
-                s.append('<text x="%s" y="%s" style="font-size:5px" fill="#808080" text-anchor="middle" dominant-baseline="text-top">%s&#176;</text>' % (i*15-75,6,i*15+15 if i<5 else 165-i*15))
-                s.append( '<text x="%s" y="%s" style="font-size:5px" fill="#808080" text-anchor="start" dominant-baseline="middle">%s&#176;</text>' % (2.5,i*15-75,i*15+15 if i<5 else 165-i*15))
+                s.append('<text x="%s" y="%s" style="%s" fill="#808080" text-anchor="middle" dominant-baseline="text-top">%s&#176;</text>' % (
+                    i*15-75,6,self.get_font_style(5),i*15+15 if i<5 else 165-i*15))
+                s.append('<text x="%s" y="%s" style="%s" fill="#808080" text-anchor="start" dominant-baseline="middle">%s&#176;</text>' % (
+                    2.5,i*15-75,self.get_font_style(5),i*15+15 if i<5 else 165-i*15))
         # celestial pole and equator
         # displayed for latitude more than 5 degrees north or south only
         if abs(almanac_obj.lat)>5.0:
@@ -468,8 +481,8 @@ class SkymapBinder:
                 y1,x1,y2))
             # label of the celestial pole
             s.append( 
-                '<text x="-3.5" y="%s" style="font-size:5px" fill="#808080" text-anchor="end" dominant-baseline="middle">%s</text>\n' % (
-                y1,txt))
+                '<text x="-3.5" y="%s" style="%s" fill="#808080" text-anchor="end" dominant-baseline="middle">%s</text>\n' % (
+                y1,self.get_font_style(5),txt))
             # circle of right ascension
             s.append(self.circle_of_right_ascension(observer, almanac_obj, time_ti))
         time1_ts = time.thread_time_ns()*0.000001
@@ -694,7 +707,7 @@ class SkymapBinder:
                 else:
                     s.append( '<circle cx="%.4f" cy="%.4f" r="%.2f" fill="%s" stroke="none" />\n' % (dot[2],dot[3],dot[4],dot[6]))
                 if dot[9] and len(dot[9])<=2:
-                    s.append('<text x="%.4f" y="%.4f" font-size="%s" fill="#fff" text-anchor="middle" dominant-baseline="middle">%s</text>' % (dot[2],dot[3],dot[4]*1.2,dot[9]))
+                    s.append('<text x="%.4f" y="%.4f" style="%s" fill="#fff" text-anchor="middle" dominant-baseline="middle">%s</text>' % (dot[2],dot[3],self.get_font_style(dot[4]*1.2),dot[9]))
                 s.append('</g>\n')
         time5_ts = time.thread_time_ns()*0.000001
         # end clipping
@@ -727,52 +740,55 @@ class SkymapBinder:
                 x += 2*self.inout
             else:
                 txt = "%d°" % (i*15)
-            s.append('<text x="%.4f" y="%.4f" style="font-size:5px" fill="currentColor" text-anchor="middle" dominant-baseline="middle">%s</text>\n' % (x,y,txt))
+            s.append('<text x="%.4f" y="%.4f" style="%s" fill="currentColor" text-anchor="middle" dominant-baseline="middle">%s</text>\n' % (x,y,self.get_font_style(5),txt))
         if self.show_timestamp:
             # sidereal time
             sidereal_time = station.lst_hours_at(time_ti)*3600
             sd = time.strftime("%H:%M:%S",time.gmtime(sidereal_time))
-            s.append('<text x="97" y="-93" font-size="5" fill="currentColor" text-anchor="end">%s</text>\n' % self.get_text('Sidereal time'))
-            s.append('<text x="97" y="-87" font-size="5" fill="currentColor" text-anchor="end">%s</text>\n' % sd)
+            s.append('<text x="97" y="-93" style="%s" fill="currentColor" text-anchor="end">%s</text>\n' % (self.get_font_style(5),self.get_text('Sidereal time')))
+            s.append('<text x="97" y="-87" style="%s" fill="currentColor" text-anchor="end">%s</text>\n' % (self.get_font_style(5),sd))
             # solar time
             ha, _, _ = observer.at(time_ti).observe(user.skyfieldalmanac.ephemerides['sun']).apparent().hadec()
             solar_time = (ha.hours-12.0)*3600
             sd = time.strftime("%H:%M:%S",time.gmtime(solar_time))
-            s.append('<text x="-97" y="-93" font-size="5" fill="currentColor" text-anchor="start">%s</text>\n' % self.get_text('Solar time'))
-            s.append('<text x="-97" y="-87" font-size="5" fill="currentColor" text-anchor="start">%s</text>\n' % sd)
+            s.append('<text x="-97" y="-93" style="%s" fill="currentColor" text-anchor="start">%s</text>\n' % (self.get_font_style(5),self.get_text('Solar time')))
+            s.append('<text x="-97" y="-87" style="%s" fill="currentColor" text-anchor="start">%s</text>\n' % (self.get_font_style(5),sd))
             # civil time
             time_vt = ValueHelper(ValueTuple(almanac_obj.time_ts,'unix_epoch','group_time'),'ephem_year',formatter=almanac_obj.formatter,converter=almanac_obj.converter)
             if '%x' in almanac_obj.formatter.time_format_dict.get('ephem_year'):
                 time_s = (time_vt.format('%x'),time_vt.format('%X'))
             else:
                 time_s = str(time_vt).split(' ')
-            s.append('<text x="97" dy="87" font-size="5" fill="currentColor" text-anchor="end">%s</text>\n' % time_s[0])
+            s.append('<text x="97" dy="87" style="%s" fill="currentColor" text-anchor="end">%s</text>\n' % (self.get_font_style(5),time_s[0]))
             if len(time_s)>1 and time_s[1]:
-                s.append('<text x="97" y="93" font-size="5" fill="currentColor" text-anchor="end">%s</text>\n' % time_s[1])
+                s.append('<text x="97" y="93" style="%s" fill="currentColor" text-anchor="end">%s</text>\n' % (self.get_font_style(5),time_s[1]))
         if self.show_location:
             lat_vt = ValueHelper(ValueTuple(abs(almanac_obj.lat),'degree_compass','group_direction'),'current',formatter=almanac_obj.formatter,converter=almanac_obj.converter)
             lon_vt = ValueHelper(ValueTuple(abs(almanac_obj.lon),'degree_compass','group_direction'),'current',formatter=almanac_obj.formatter,converter=almanac_obj.converter)
             lat_s = lat_vt.format("%8.4f")
             lon_s = lon_vt.format("%08.4f")
             if self.location:
-                s.append('<text x="-97" y="87" font-size="5" fill="currentColor" text-anchor="start">%s</text>\n' % self.location)
-                s.append('<text x="-97" y="92" font-size="3.5" fill="currentColor" text-anchor="start">%s %s, %s %s</text>\n' % (
+                s.append('<text x="-97" y="87" style="%s" fill="currentColor" text-anchor="start">%s</text>\n' % (self.get_font_style(5),self.location))
+                s.append('<text x="-97" y="92" style="%s" fill="currentColor" text-anchor="start">%s %s, %s %s</text>\n' % (
+                    self.get_font_style(3.5),
                     lat_s.strip(),ordinates[0 if almanac_obj.lat>=0 else 8],
                     lon_s,ordinates[4 if almanac_obj.lon>=0 else 12]
                 ))
             else:
-                s.append('<text x="-97" y="87" font-size="5" fill="currentColor" text-anchor="start">%s %s</text>\n' % (
+                s.append('<text x="-97" y="87" style="%s" fill="currentColor" text-anchor="start">%s %s</text>\n' % (
+                    self.get_font_style(5),
                     lat_s.replace(' ','&#8199;'), # &numsp;
                     ordinates[0 if almanac_obj.lat>=0 else 8]))
-                s.append('<text x="-97" y="93" font-size="5" fill="currentColor" text-anchor="start">%s %s</text>\n' % (
+                s.append('<text x="-97" y="93" style="%s" fill="currentColor" text-anchor="start">%s %s</text>\n' % (
+                    self.get_font_style(5),
                     lon_s,ordinates[4 if almanac_obj.lon>=0 else 12]))
         #s.append(moonphasetest())
         datasource = ['IERS']
         if self.bodies: datasource.append('JPL')
         if self.show_stars: datasource.append('ESA') # Hipparcos
         if self.earthsatellites: datasource.append('CelesTrak')
-        s.append('<text x="-97" y="97" font-size="3" fill="#808080" text-anchor="start">%s: %s</text>\n' % (self.get_text('Data source'),', '.join(datasource)))
-        s.append('<text x="97" y="97" font-size="3" fill="#808080" text-anchor="end">%s</text>\n' % self.credits)
+        s.append('<text x="-97" y="97" style="%s" fill="#808080" text-anchor="start">%s: %s</text>\n' % (self.get_font_style(3),self.get_text('Data source'),', '.join(datasource)))
+        s.append('<text x="97" y="97" style="%s" fill="#808080" text-anchor="end">%s</text>\n' % (self.get_font_style(3),self.credits))
         s.append(SkymapAlmanacType.SVG_END)
         time6_ts = time.thread_time_ns()*0.000001
         log_end_ts = time.time()
@@ -837,7 +853,6 @@ class MoonSymbolBinder:
             moon('moon', txt, 0, 0, 100, None, self.colors, None, phase,'moon',alpha),
             SkymapAlmanacType.SVG_END
         )
-        return s
 
 
 class AnalemmaBinder:
@@ -860,6 +875,12 @@ class AnalemmaBinder:
         self.tz = "civil"
         self.show_timestamp = weeutil.weeutil.to_bool(config_dict.get('show_timestamp',True))
         self.show_location = weeutil.weeutil.to_bool(config_dict.get('show_location',True))
+        # ADD THIS LINE:
+        self.font_family = config_dict.get('font_family', 'sans-serif')
+
+    def get_font_style(self, size):
+        """Generate font style string with font-family"""
+        return 'font-size:%spx; font-family:%s' % (size, self.font_family)
 
     def __call__(self, **kwargs):
         for key in kwargs:
@@ -867,6 +888,8 @@ class AnalemmaBinder:
                 self.width = weeutil.weeutil.to_int(kwargs[key])
             elif key in {'show_timestamp','show_location'}:
                 setattr(self,key,weeutil.weeutil.to_bool(kwargs[key]))
+            elif key == 'font_family':  # ADD THIS
+                self.font_family = kwargs[key]
             else:
                 setattr(self,key,kwargs[key])
         return self
@@ -959,17 +982,17 @@ class AnalemmaBinder:
             y = (i-min_alt)*y_factor+y0
             if int(min_alt)<i<int(max_alt):
                 s.append('<line x1="%.2f" y1="%.2f" x2="%.2f" y2="%.2f" stroke="%s" />\n' % (x0,y,x0+width,y,self.colors[1]))
-            s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="end" dominant-baseline="middle">%s&#176;</text>\n' % (x0-3,y,self.colors[0],fontsize,i))
-        s.append('<text x="%.2f" y="%.2f" fill="currentColor" font-size="%s" text-anchor="middle" dominant-baseline="middle" transform="rotate(270,%.2f,%.2f)">%s</text>\n' % (
-            x0-2.3*fontsize,y0-0.5*height,fontsize,x0-2.3*fontsize,y0-0.5*height,self.labels.get('Altitude','Altitude')))
+            s.append('<text x="%.2f" y="%.2f" style="%s" text-anchor="end" dominant-baseline="middle">%s&#176;</text>\n' % (x0-3,y,self.get_font_style(fontsize),i))
+        s.append('<text x="%.2f" y="%.2f" style="%s" text-anchor="middle" dominant-baseline="middle" transform="rotate(270,%.2f,%.2f)">%s</text>\n' % (
+            x0-2.3*fontsize,y0-0.5*height,self.get_font_style(fontsize),x0-2.3*fontsize,y0-0.5*height,self.labels.get('Altitude','Altitude')))
         # x scale
         for i in range(int(min_az),int(max_az)+xscale,xscale):
             x = (i-min_az)*x_factor+x0
             s.append('<line x1="%.2f" y1="%.2f" x2="%.2f" y2="%.2f" stroke="%s" />\n' % (x,y0,x,y0-height,self.colors[1]))
-            s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="middle" dominant-baseline="middle">%s&#176;</text>\n' % (
-                x,y0+fontsize*1.1,self.colors[0],fontsize,i%360))
-        s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="middle" dominant-baseline="middle">%s</text>\n' % (
-            x0+0.5*width,y0+fontsize*2.2,self.colors[0],fontsize,self.labels.get('Azimuth','Azimuth')))
+            s.append('<text x="%.2f" y="%.2f" style="%s" text-anchor="middle" dominant-baseline="middle">%s&#176;</text>\n' % (
+                x,y0+fontsize*1.1,self.get_font_style(fontsize),i%360))
+        s.append('<text x="%.2f" y="%.2f" style="%s" text-anchor="middle" dominant-baseline="middle">%s</text>\n' % (
+            x0+0.5*width,y0+fontsize*2.2,self.get_font_style(fontsize),self.labels.get('Azimuth','Azimuth')))
         # analemma
         s.append('<path stroke="%s" stroke-width="2" fill="none" d="M%s,%s' % (self.colors[2],xs[0],ys[1]))
         for x,y in zip(xs,ys):
@@ -1019,21 +1042,20 @@ class AnalemmaBinder:
                     xoffset = r
                 if w==1:
                     yoffset = -0.8*fontsize
-                    s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="%s">%s</text>\n' % (
+                    s.append('<text x="%.2f" y="%.2f" style="%s" text-anchor="%s">%s</text>\n' % (
                         x0+0.4*fontsize if c>0.5 else x0+width-0.4*fontsize,
                         y0-height+1.4*fontsize,
-                        self.colors[3],
-                        fontsize*1.1,
+                        self.get_font_style(fontsize*1.1),
                         "start" if c>0.5 else "end",
                         year
                     ))
                 else:
                     yoffset = fontsize
-            s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="%s" dominant-baseline="middle">%s</text>\n' % (
-                x+xoffset,y+yoffset,self.colors[3],fontsize*1.1,anchor,time_s))
+            s.append('<text x="%.2f" y="%.2f" style="%s" text-anchor="%s" dominant-baseline="middle">%s</text>\n' % (
+                x+xoffset,y+yoffset,self.get_font_style(fontsize*1.1),anchor,time_s))
         # caption
-        s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="middle">%s</text>\n' % (
-            0.5*self.width,fontsize*1.5,self.colors[0],fontsize*1.5,self.labels.get("Analemma","Analemma")))
+        s.append('<text x="%.2f" y="%.2f" style="%s" text-anchor="middle">%s</text>\n' % (
+            0.5*self.width,fontsize*1.5,self.get_font_style(fontsize*1.5),self.labels.get("Analemma","Analemma")))
         formatter = self.almanac_obj.formatter
         txt = ""
         if self.show_timestamp:
@@ -1062,7 +1084,6 @@ class AnalemmaBinder:
                 txt = "%s, %s" % (txt,self.location)
             else:
                 # location described by geographic coordinates
-        # location
                 lat_vt = ValueHelper(ValueTuple(abs(self.almanac_obj.lat),'degree_compass','group_direction'),'current',formatter=formatter,converter=self.almanac_obj.converter)
                 lon_vt = ValueHelper(ValueTuple(abs(self.almanac_obj.lon),'degree_compass','group_direction'),'current',formatter=formatter,converter=self.almanac_obj.converter)
                 lat_s = lat_vt.format("%.4f").replace(' ','&#8199;') # &numsp;
@@ -1074,8 +1095,8 @@ class AnalemmaBinder:
                     lon_s,
                     formatter.ordinate_names[4 if self.almanac_obj.lon>=0 else 12]
                 )
-        s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="middle">%s</text>\n' % (
-            0.5*self.width,fontsize*2.7,self.colors[0],fontsize*1.1,txt))
+        s.append('<text x="%.2f" y="%.2f" style="%s" text-anchor="middle">%s</text>\n' % (
+            0.5*self.width,fontsize*2.7,self.get_font_style(fontsize*1.1),txt))
         s.append(SkymapAlmanacType.SVG_END)
         return "".join(s)
 
